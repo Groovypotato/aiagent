@@ -1,5 +1,3 @@
-import os
-
 def get_files_info(working_directory, directory=None):
     abs_working_directory = os.path.abspath(working_directory)
     abs_target_dir =""
