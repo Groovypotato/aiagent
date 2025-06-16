@@ -8,7 +8,6 @@ from functions.call_function import call_function
 load_dotenv()
 api_key = os.environ.get("GEMINI_API_KEY")
 client = genai.Client(api_key=api_key)
-
 user_prompt = ""
 flag = ""
 system_prompt = """
@@ -23,8 +22,6 @@ When a user asks a question or makes a request, make a function call plan. You c
 
 All paths you provide should be relative to the working directory. You do not need to specify the working directory in your function calls as it is automatically injected for security reasons.
 """
-
-
 schema_get_files_info = types.FunctionDeclaration(
     name="get_files_info",
     description="Lists files in the specified directory along with their sizes, constrained to the working directory.",
@@ -38,7 +35,6 @@ schema_get_files_info = types.FunctionDeclaration(
         },
     ),
 )
-
 schema_get_file_content = types.FunctionDeclaration(
     name="get_file_content",
     description="Returns the content of the file specified in the directory, constrained to the working directory.",
@@ -52,7 +48,6 @@ schema_get_file_content = types.FunctionDeclaration(
         },
     ),
 )
-
 schema_run_python_file = types.FunctionDeclaration(
     name="run_python_file",
     description="Runs a specified python file and returns the output, constrained to the working directory. If the process takes longer than 30 seconds the file will time out",
@@ -66,7 +61,6 @@ schema_run_python_file = types.FunctionDeclaration(
         },
     ),
 )
-
 schema_write_file = types.FunctionDeclaration(
     name="write_file",
     description="Uses a file path and content to write to write to a file.",
@@ -84,7 +78,6 @@ schema_write_file = types.FunctionDeclaration(
         },
     ),
 )
-
 available_functions = types.Tool(
     function_declarations=[
         schema_get_files_info,
@@ -93,61 +86,54 @@ available_functions = types.Tool(
         schema_write_file
     ]
 )
-
 if len(sys.argv) > 1:
     user_prompt = sys.argv[1]
 
 if len(sys.argv) > 2:
     flag = sys.argv[2]
-
 messages = [
     types.Content(role="user", parts=[types.Part(text=user_prompt)]),
     ]
-
-
-
 if len(user_prompt) > 1:
-    response = client.models.generate_content(
-    model='gemini-2.0-flash-001', 
-    contents=messages,
-    config=types.GenerateContentConfig(
-        tools=[available_functions], system_instruction=system_prompt
+
+    for i in range(20):
+        func_flag = False
+        response = client.models.generate_content(
+        model='gemini-2.0-flash-001', 
+        contents=messages,
+        config=types.GenerateContentConfig(
+            tools=[available_functions], system_instruction=system_prompt
+            )
+        
         )
-    
-    )
-
-    if flag == "--verbose":
-        print(f"User prompt: {sys.argv[1]}")
-        print(f"Prompt tokens: {response.usage_metadata.prompt_token_count}")
-        print(f"Response tokens: {response.usage_metadata.candidates_token_count}")
-    
-    if len(response.function_calls) > 0:
-        functions = response.function_calls[0]
-        func_res = ""
-        vflag = False
         if flag == "--verbose":
-            vflag = True
-        func_res = call_function(functions, verbose=vflag)
-        if not func_res.parts[0].function_response.response == None:
-            if vflag == True:
-                print(f"-> {func_res.parts[0].function_response.response}")
+            print(f"User prompt: {sys.argv[1]}")
+            print(f"Prompt tokens: {response.usage_metadata.prompt_token_count}")
+            print(f"Response tokens: {response.usage_metadata.candidates_token_count}")
+
+        for j in range(len(response.candidates)):
+            messages.append(response.candidates[j].content)
+
+            function_calls_found = []
+            for part in response.candidates[j].content.parts:
+                if hasattr(part, 'function_call') and part.function_call is not None:
+                    function_calls_found.append(part.function_call)
+
+            if len(function_calls_found) == 0:
+                continue
             else:
-                print(f"{func_res.parts[0].function_response.response}")
-        else:
-            raise Exception("Fatal Error: Whoopsie you got no 'call_function(functions).parts[0].function_response.response'")
-    else:
-        print(response.text)
- 
+                func_flag = True
+                vflag = False
+                if flag == "--verbose":
+                    vflag = True
 
-
-
-
-
-
-
-
-
-
+                for function_call in function_calls_found:
+                    func_res = call_function(function_call, verbose=vflag)
+                    messages.append(func_res)
+        if func_flag == False:
+            break
+    print(response.text)
 else:
     sys.exit(1)
+
 
