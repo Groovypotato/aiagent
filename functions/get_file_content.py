@@ -1,4 +1,6 @@
-def get_file_content(working_directory="calculator", file_path="main.py"):
+import os
+
+def get_file_content(working_directory, file_path):
     abs_working_directory = os.path.abspath(working_directory)
     abs_target_file = os.path.abspath(os.path.join(working_directory, file_path))
     MAX_CHARS = 10000
